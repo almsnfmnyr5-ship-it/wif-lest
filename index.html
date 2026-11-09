@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>بوابة الموزع والنقاط</title>
+    <link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#3b82f6">
+
+    
+    
+    <!-- مكتبات Firebase الأساسية -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --primary-dark: #1d4ed8;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-secondary: #4b5563;
+        }
+
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-color); margin: 0; padding: 15px; color: var(--text-main); height: 100vh; overflow: hidden; }
+        
+        .container { max-width: 600px; height: calc(100vh - 30px); margin: 0 auto; background: var(--card-bg); padding: 20px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
+        
+        h2 { text-align: center; color: var(--text-main); margin-top: 5px; margin-bottom: 5px; font-size: 22px; }
+        .subtitle { font-size: 13px; color: var(--text-secondary); text-align: center; margin-bottom: 15px; }
+
+        .auth-box, .app-box, .register-box { display: none; height: 100%; flex-direction: column; }
+        .active { display: flex !important; }
+
+        input, select, button { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 14px; margin-bottom: 10px; outline: none; transition: all 0.3s; }
+        input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); }
+        
+        button { background-color: var(--primary); color: white; font-weight: bold; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; }
+        button:hover { background-color: var(--primary-dark); }
+        button:active { transform: scale(0.98); }
+
+        .switch-link { text-align: center; margin-top: 15px; font-size: 14px; color: var(--text-secondary); }
+        .switch-link span { color: var(--primary); cursor: pointer; font-weight: bold; }
+        .switch-link span:hover { text-decoration: underline; }
+
+        .user-header { background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); flex-shrink: 0; }
+        
+        .user-info h3 { margin: 0 0 3px 0; font-size: 16px; }
+        .user-info p { margin: 0; font-size: 12px; opacity: 0.9; }
+        .btn-logout { background: rgba(239, 68, 68, 0.9); width: auto; padding: 6px 12px; font-size: 12px; margin: 0; border-radius: 6px; }
+
+        .status-badge { text-align: center; padding: 6px; border-radius: 6px; font-size: 11px; margin-bottom: 10px; font-weight: bold; flex-shrink: 0; transition: all 0.3s; }
+        .status-offline { background: #fee2e2; color: #991b1b; }
+        .status-online { background: #d1fae5; color: #065f46; }
+
+        /* إضافة تنسيق المؤشر المتحرك والإشعار الخفيف دون التأثير على شي آخر */
+        .sync-indicator { display: none; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: var(--primary); background: #eff6ff; padding: 6px; border-radius: 6px; margin-bottom: 10px; border: 1px solid #bfdbfe; flex-shrink: 0; }
+        .sync-spinner { width: 14px; height: 14px; border: 2px solid var(--primary); border-top: 2px solid transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        #toastNotification { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px); background-color: var(--success); color: white; padding: 10px 20px; border-radius: 25px; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999; opacity: 0; transition: transform 0.3s ease, opacity 0.3s ease; pointer-events: none; text-align: center; }
+        #toastNotification.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+        #toastNotification.error { background-color: var(--danger); }
+
+        .stats-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; flex-shrink: 0; }
+        .stat-box { background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px; border-radius: 10px; text-align: center; }
+        .stat-box span { display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 3px; }
+        .stat-box strong { font-size: 15px; color: var(--text-main); }
+
+        .filter-group { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-shrink: 0; }
+        .filter-group select { margin-bottom: 0; flex-grow: 1; }
+        .btn-sync { background-color: var(--success); width: 45px; height: 45px; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 0; padding: 0; flex-shrink: 0; box-shadow: 0 2px 5px rgba(16, 185, 129, 0.3); }
+        .btn-sync:hover { background-color: #059669; }
+        .btn-sync svg { width: 20px; height: 20px; fill: white; }
+
+        #cardsList { flex-grow: 1; overflow-y: auto; padding-right: 4px; padding-left: 4px; }
+
+        .card-item { background: transparent; border-bottom: 1px solid #e5e7eb; padding: 12px 4px; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; }
+        .card-item.sold-card { opacity: 0.6; background: #fafafa; }
+        
+        .card-code { font-size: 16px; font-weight: 700; letter-spacing: 1px; color: #1f2937; font-family: monospace; }
+        .encrypted { font-family: monospace; letter-spacing: 2px; color: #9ca3af; font-weight: bold; font-size: 14px; }
+
+        .card-left { display: flex; align-items: center; gap: 8px; }
+        .card-right { display: flex; align-items: center; gap: 8px; }
+        
+        .btn-sell { background-color: var(--danger); width: auto; padding: 6px 14px; margin: 0; border-radius: 6px; font-size: 12px; font-weight: 600; }
+        .btn-sell:hover { background-color: #dc2626; }
+
+        .btn-copy { background-color: #e5e7eb; color: #374151; width: auto; padding: 6px 8px; margin: 0; border-radius: 6px; font-size: 11px; }
+        .btn-copy:hover { background-color: #d1d5db; }
+
+        .badge { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: bold; color: white; display: inline-block; }
+        .cat-100 { background-color: #3b82f6; }
+        .cat-200 { background-color: #8b5cf6; }
+        .cat-250 { background-color: #ec4899; }
+        .cat-500 { background-color: #10b981; }
+        .cat-1000 { background-color: #f59e0b; }
+        .cat-2000 { background-color: #6366f1; }
+        .cat-other { background-color: #64748b; }
+        
+        .loading-spinner { text-align: center; color: var(--primary); font-weight: bold; padding: 10px; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    
+    <!-- 1. واجهة تسجيل الدخول -->
+    <div id="loginSection" class="auth-box active">
+        <h2>تسجيل دخول الموزع</h2>
+        <p class="subtitle">أدخل رقم الهاتف وكلمة المرور للبدء</p>
+        <input type="text" id="loginPhone" placeholder="رقم الهاتف (كود النقطة)">
+        <input type="password" id="loginPassword" placeholder="كلمة المرور">
+        <button onclick="loginDistributor()">تسجيل الدخول</button>
+        
+        <div class="switch-link">
+            ليس لديك حساب نقطة؟ <span onclick="showRegisterSection()">طلب إنشاء حساب جديد</span>
+        </div>
+    </div>
+
+    <!-- 2. واجهة طلب إنشاء حساب جديد -->
+    <div id="registerSection" class="register-box">
+        <h2>تسجيل نقطة جديدة</h2>
+        <p class="subtitle">قم بملء البيانات لتسجيل حساب جديد</p>
+        
+        <input type="text" id="regPointName" placeholder="اسم النقطة (مثال: نقطة السعادة)">
+        <input type="text" id="regPhone" placeholder="رقم الهاتف (سيكون هو كود النقطة)">
+        <input type="password" id="regPassword" placeholder="كلمة المرور">
+        <button onclick="submitRegisterRequest()">إرسال طلب التسجيل</button>
+        
+        <div class="loading-spinner" id="regLoading">جاري إرسال الطلب للسيرفر...</div>
+        <div class="switch-link">
+            لديك حساب بالفعل؟ <span onclick="showLoginSection()">تسجيل الدخول</span>
+        </div>
+    </div>
+
+    <!-- 3. واجهة التطبيق الرئيسية للموزع -->
+    <div id="appSection" class="app-box">
+        <div class="user-header">
+            <div class="user-info">
+                <h3 id="pointNameDisplay">اسم النقطة</h3>
+                <p>رقم النقطة: <span id="pointPhoneDisplay">---</span></p>
+            </div>
+            <button class="btn-logout" onclick="logout()">تسجيل الخروج</button>
+        </div>
+
+        <div id="networkStatusBadge" class="status-badge status-offline">
+            وضع العمل: متاح محلياً (أوفلاين) 
+        </div>
+
+        <!-- مؤشر المزامنة المتحرك المضاف -->
+        <div id="syncIndicator" class="sync-indicator">
+            <div class="sync-spinner"></div>
+            <span>جاري مزامنة المبيعات في الخلفية...</span>
+        </div>
+        
+        <!-- لوحة الإحصائيات -->
+        <div class="stats-container">
+            <div class="stat-box">
+                <span>المتاحة (المتبقي)</span>
+                <strong id="statAvailable" style="color: var(--success);">0</strong> 
+            </div>
+            <div class="stat-box"> 
+                <span>المباعة</span>
+                <strong id="statSold" style="color: var(--danger);">0</strong> 
+            </div>
+            <div class="stat-box">
+                <span>إجمالي المبيعات</span>
+                <strong id="statRevenue" style="color: var(--primary);">0 ر.ي</strong> 
+            </div>
+        </div>
+
+        <!-- قسم الفئات وزر المزامنة -->
+        <div class="filter-group">
+            <select id="filterCategory" onchange="renderCards()">
+                <option value="all">جميع الفئات</option>
+            </select>
+            <button class="btn-sync" onclick="syncSalesToCloud()" title="مزامنة المبيعات">
+                <svg viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+            </button>
+        </div>
+
+        <!-- قائمة عناصر الكروت -->
+        <div id="cardsList"></div>
+    </div>
+
+</div>
+
+<!-- عنصر الإشعار الخفيف المضاف -->
+<div id="toastNotification">تمت العملية بنجاح</div>
+
+<script>
+    /* إعدادات الاتصال بقاعدة بيانات Firebase */
+    const FIREBASE_CONFIG = {
+        apiKey: "AIzaSyD3PK8peJPt3eWz37XsEalYK4zr5aA6b4s",
+        authDomain: "wifi-97c1c.firebaseapp.com",
+        databaseURL: "https://wifi-97c1c-default-rtdb.firebaseio.com",
+        projectId: "wifi-97c1c",
+        storageBucket: "wifi-97c1c.firebasestorage.app",
+        messagingSenderId: "491798080084",
+        appId: "1:491798080084:web:905dea6e4dcb6f9d959bc1",
+        measurementId: "G-GQTX8N84M1" 
+    };
+
+    let db = null;
+    try {
+        if (typeof firebase !== 'undefined') {
+            firebase.initializeApp(FIREBASE_CONFIG);
+            db = firebase.database(); 
+        }
+    } catch (e) {
+        console.log("العمل في وضع الأوفلاين التام"); 
+    }
+
+    /* استرجاع بيانات الموزع الحالي المحفوظة في التخزين المحلي */
+    let currentDistributor = JSON.parse(localStorage.getItem('active_distributor')) || null;
+
+    /* دالة إظهار الإشعار الخفيف (Toast Notification) */
+    function showToast(message, isError = false) {
+        const toast = document.getElementById('toastNotification');
+        if (!toast) return;
+        toast.innerText = message;
+        toast.className = isError ? 'error show' : 'show';
+        setTimeout(() => {
+            toast.className = '';
+        }, 3000);
+    }
+
+    /* دالة التحكم في إظهار أو إخفاء مؤشر المزامنة المتحرك */
+    function toggleSyncIndicator(show) {
+        const indicator = document.getElementById('syncIndicator');
+        if (indicator) {
+            indicator.style.display = show ? 'flex' : 'none';
+        }
+    }
+
+    /* تحديث حالة الاتصال بالشبكة في الواجهة */
+    function updateNetworkStatus() {
+        const badge = document.getElementById('networkStatusBadge');
+        if (!badge) return;
+        if (navigator.onLine && db) {
+            badge.className = "status-badge status-online";
+            badge.innerText = "وضع العمل: متصل بالسيرفر (أونلاين)";
+        } else {
+            badge.className = "status-badge status-offline";
+            badge.innerText = "وضع العمل: متاح محلياً (أوفلاين)";
+        }
+    }
+ 
+    window.addEventListener('online', () => {
+        updateNetworkStatus();
+        autoSyncOnReconnect(); // المزامنة التلقائية فور عودة الإنترنت
+    });
+    
+    window.addEventListener('offline', updateNetworkStatus);
+
+    /* دالة لعرض واجهة تسجيل الدخول */
+    function showLoginSection() {
+        document.getElementById('registerSection').classList.remove('active');
+        document.getElementById('loginSection').classList.add('active');
+    }
+
+    /* دالة لعرض واجهة طلب إنشاء حساب جديد */
+    function showRegisterSection() {
+        document.getElementById('loginSection').classList.remove('active');
+        document.getElementById('registerSection').classList.add('active');
+    }
+
+    /* دالة إرسال طلب تسجيل نقطة جديد إلى قاعدة البيانات */
+    function submitRegisterRequest() {
+        const name = document.getElementById('regPointName').value.trim();
+        const phone = document.getElementById('regPhone').value.trim();
+        const password = document.getElementById('regPassword').value.trim();
+
+        if (!name || !phone || !password) {
+            showToast('يرجى ملء جميع الحقول المطلوبة', true); 
+            return; 
+        }
+
+        if (!navigator.onLine || !db) {
+            showToast('لا يوجد اتصال بالإنترنت لإرسال طلب التسجيل.', true);
+            return; 
+        }
+
+        document.getElementById('regLoading').style.display = 'block';
+
+        const requestData = {
+            name: name,
+            phone: phone,
+            password: password,
+            status: 'pending',
+            createdAt: new Date().toLocaleString('ar-YE') 
+        };
+
+        db.ref('distributorRequests/' + phone).set(requestData)
+        .then(() => {
+            document.getElementById('regLoading').style.display = 'none';
+            showToast('تم إرسال طلبك بنجاح! بانتظار موافقة الإدارة.');  
+            showLoginSection(); 
+        })
+        .catch(err => {           
+            document.getElementById('regLoading').style.display = 'none';
+            showToast('حدث خطأ أثناء إرسال الطلب، تأكد من الاتصال بالشبكة.', true); 
+        });              
+    }
+
+    /* دالة تسجيل دخول الموزع */
+    function loginDistributor() {
+        const phone = document.getElementById('loginPhone').value.trim();
+        const password = document.getElementById('loginPassword').value.trim();
+
+        if (!phone || !password) {
+            showToast('يرجى إدخال رقم الهاتف وكلمة المرور', true); 
+            return; 
+        }
+
+        if (!navigator.onLine || !db) {
+            let savedDist = JSON.parse(localStorage.getItem('dist_profile_' + phone));
+            if (savedDist && savedDist.password === password) {
+                currentDistributor = savedDist;
+                localStorage.setItem('active_distributor', JSON.stringify(currentDistributor));
+                fetchCardsFromCloud(true); 
+            } else {
+                showToast('لا يوجد اتصال بالإنترنت ولا توجد بيانات محلية مطابقة لهذا الحساب.', true);
+            } 
+            return; 
+        }
+
+        db.ref('distributors/' + phone).once('value')
+        .then(snapshot => {
+            const dist = snapshot.val();
+            if (!dist) {
+                db.ref('distributorRequests/' + phone).once('value').then(reqSnap => {
+                    if (reqSnap.exists()) {
+                        showToast('حسابك قيد المراجعة وبانتظار موافقة لوحة التحكم.', true);
+                    } else {
+                        showToast('رقم الهاتف غير مسجل أو لم يتم اعتماده بعد.', true);
+                    }
+                }); 
+                return; 
+            }
+
+            if (dist.password !== password) {
+                showToast('كلمة المرور غير صحيحة', true); 
+                return; 
+            }
+
+            currentDistributor = dist;
+            
+            localStorage.setItem('dist_profile_' + phone, JSON.stringify(currentDistributor));
+            localStorage.setItem('active_distributor', JSON.stringify(currentDistributor));
+            fetchCardsFromCloud(); 
+        })
+        .catch(() => {
+            showToast('تعذر التحقق، تأكد من الاتصال بالإنترنت.', true);
+        }); 
+    }
+
+    /* دالة تسجيل الخروج */
+    function logout() {
+        localStorage.removeItem('active_distributor');
+        currentDistributor = null;
+        document.getElementById('appSection').classList.remove('active');
+        document.getElementById('loginSection').classList.add('active'); 
+    }
+
+    /* دالة جلب الكروت من السيرفر أو المحفظة المحلية */
+    function fetchCardsFromCloud(isOfflineLogin = false) {
+        if (!currentDistributor) return;
+        const inputId = currentDistributor.phone;
+
+        let localCards = JSON.parse(localStorage.getItem('local_cards_' + inputId)) || [];
+
+        if (!navigator.onLine || !db || isOfflineLogin) {
+            if (localCards.length > 0 || isOfflineLogin) {
+                showAppScreen();
+            } else {
+                showToast('لا توجد كروت محفوظة محلياً لهذا الحساب.', true); 
+            }
+            return;  
+        }
+
+        db.ref('cards').orderByChild('distributorId').equalTo(inputId).once('value')
+        .then(snapshot => { 
+            const data = snapshot.val();  
+            if (data) {
+                Object.values(data).forEach(cloudCard => {
+                    const localIndex = localCards.findIndex(c => c.id === cloudCard.id);
+                    if (localIndex === -1) {
+                        localCards.push(cloudCard);
+                    } else {
+                        localCards[localIndex].isSold = cloudCard.isSold;
+                        localCards[localIndex].category = cloudCard.category;   
+                    } 
+                }); 
+            }
+
+            localStorage.setItem('local_cards_' + inputId, JSON.stringify(localCards));
+            showAppScreen();
+        })
+        .catch(err => {
+            if (localCards.length > 0) { 
+                showAppScreen(); 
+            } else { 
+                showToast('تعذر جلب الكروت من السيرفر.', true);
+            }  
+        });
+    }
+
+    /* دالة عرض الشاشة الرئيسية */
+    function showAppScreen() { 
+        document.getElementById('loginSection').classList.remove('active');
+        document.getElementById('registerSection').classList.remove('active');
+        document.getElementById('appSection').classList.add('active');
+        document.getElementById('pointNameDisplay').innerText = currentDistributor.name;
+        document.getElementById('pointPhoneDisplay').innerText = currentDistributor.phone;
+
+        updateNetworkStatus();
+        updateCategoryDropdown();
+        renderCards();       
+    }
+
+    /* دالة جلب الكروت المحفوظة محلياً */
+    function getLocalCards() {
+        if (!currentDistributor) return [];
+        return JSON.parse(localStorage.getItem('local_cards_' + currentDistributor.phone)) || [];
+    }
+
+    /* تحديث القائمة المنسدلة للفئات */
+    function updateCategoryDropdown() {
+        const cards = getLocalCards();
+        const selectElement = document.getElementById('filterCategory');
+        selectElement.innerHTML = '<option value="all">جميع الفئات</option>';
+        const categories = [...new Set(cards.map(c => c.category))];
+        categories.forEach(cat => {
+            if (cat) {
+                const option = document.createElement('option');
+                option.value = cat;
+                option.textContent = `فئة ${cat}`;
+                selectElement.appendChild(option);
+            }
+        });
+    }
+
+    /* دالة تشفير كود الكرت المباع */
+    function encryptCode(code) {
+        if (!code || code.length <= 4) return "****";
+        return code.substring(0, 4) + "******" + code.substring(code.length - 4);
+    }
+
+    /* دالة نسخ كود الكرت للحافظة */
+    function copyCardCode(code) {        
+        navigator.clipboard.writeText(code).then(() => {
+            showToast('تم نسخ الكود: ' + code);
+        }).catch(() => {
+            showToast('الكود هو: ' + code, true);
+        }); 
+    }
+
+    /* دالة بيع الكرت محلياً مع تأكيد العملية */
+    function sellCard(cardId) {
+        let cards = getLocalCards();
+        let card = cards.find(c => c.id === cardId);
+        if (card && !card.isSold) {
+            if (confirm(`هل أنت تأكد من بيع الكرت فئة (${card.category})؟`)) {
+                card.isSold = true;
+                card.soldAt = new Date().toLocaleString('ar-YE');
+                card.synced = false;                               
+                localStorage.setItem('local_cards_' + currentDistributor.phone, JSON.stringify(cards));
+                renderCards(); 
+                showToast('تم تسجيل بيع الكرت محلياً بنجاح');
+            } 
+        }
+    }
+
+    /* دالة المزامنة التلقائية في الخلفية فور عودة الاتصال */
+    function autoSyncOnReconnect() {
+        if (!navigator.onLine || !db || !currentDistributor) return;
+
+        let cards = getLocalCards();
+        let unsynced = cards.filter(c => c.isSold && c.synced === false);
+
+        if (unsynced.length === 0) {
+            fetchCardsFromCloud();
+            return;
+        }
+
+        toggleSyncIndicator(true);
+
+        let updates = {};
+        unsynced.forEach(c => {
+            updates[`/cards/${c.id}/isSold`] = true;
+            updates[`/cards/${c.id}/soldAt`] = c.soldAt;
+        });
+
+        db.ref().update(updates).then(() => {
+            cards.forEach(c => { if (c.isSold) c.synced = true; });
+            localStorage.setItem('local_cards_' + currentDistributor.phone, JSON.stringify(cards));
+            showToast(`تمت مزامنة ${unsynced.length} كرت مع السيرفر تلقائياً!`);
+            fetchCardsFromCloud();
+        }).catch(() => {
+            console.log("تعذر إجراء المزامنة التلقائية حالياً.");
+        }).finally(() => {
+            toggleSyncIndicator(false);
+        });
+    }
+
+    /* دالة مزامنة المبيعات مع السيرفر يدوياً */
+    function syncSalesToCloud() {
+        if (!navigator.onLine || !db) {
+            showToast('لا يوجد اتصال بالإنترنت لإتمام المزامنة حالياً.', true);
+            return; 
+        }
+
+        let cards = getLocalCards();
+        let unsynced = cards.filter(c => c.isSold && c.synced === false);
+
+        if (unsynced.length === 0) {
+            fetchCardsFromCloud(); 
+            showToast('تم التحديث وجلب البيانات بنجاح!'); 
+            return;
+        }
+
+        toggleSyncIndicator(true);
+
+        let updates = {};
+        unsynced.forEach(c => {
+            updates[`/cards/${c.id}/isSold`] = true;
+            updates[`/cards/${c.id}/soldAt`] = c.soldAt;
+        });
+
+        db.ref().update(updates).then(() => {
+            cards.forEach(c => { if (c.isSold) c.synced = true; });
+            localStorage.setItem('local_cards_' + currentDistributor.phone, JSON.stringify(cards));
+            showToast(`تم رفع وتأكيد مبيعات ${unsynced.length} كرت للسيرفر!`);
+            fetchCardsFromCloud();
+        }).catch(() => {
+            showToast('تعذر رفع المبيعات، تأكد من وجود اتصال بالشبكة', true);
+        }).finally(() => {
+            toggleSyncIndicator(false);
+        }); 
+    }
+
+    /* دالة اختيار لون وشارة الفئة */
+    function getCategoryClass(cat) {
+        switch(String(cat)) {
+            case '100': return 'cat-100';
+            case '200': return 'cat-200';
+            case '250': return 'cat-250';
+            case '500': return 'cat-500';
+            case '1000': return 'cat-1000';
+            case '2000': return 'cat-2000';
+            default: return 'cat-other'; 
+        } 
+    }
+
+    /* دالة عرض واستعراض الكروت والإحصائيات */
+    function renderCards() {
+        const cards = getLocalCards();
+        const selectedCat = document.getElementById('filterCategory').value;
+        const container = document.getElementById('cardsList');
+        container.innerHTML = '';
+
+        let filtered = cards.filter(c => selectedCat === 'all' || c.category === selectedCat);
+
+        let totalAvail = filtered.filter(c => !c.isSold).length;
+        let totalSold = filtered.filter(c => c.isSold).length;
+        let revenue = 0;
+        
+        filtered.forEach(c => {
+            if (c.isSold) { revenue += parseInt(c.category) || 0; }  
+        });
+
+        document.getElementById('statAvailable').innerText = totalAvail;
+        document.getElementById('statSold').innerText = totalSold;
+        document.getElementById('statRevenue').innerText = revenue.toLocaleString() + ' ر.ي';
+
+        if (filtered.length === 0) {
+            container.innerHTML = '<p style="text-align:center; color:#999; padding: 20px;">لا توجد كروت متاحة حالياً</p>';
+            return; 
+        }
+
+        filtered.sort((a, b) => (a.isSold === b.isSold) ? 0 : a.isSold ? 1 : -1);
+
+        filtered.forEach(card => {
+            const cardDiv = document.createElement('div');
+            cardDiv.className = `card-item ${card.isSold ? 'sold-card' : ''}`;
+
+            const displayCode = card.isSold ? encryptCode(card.code) : card.code;
+            const badgeClass = getCategoryClass(card.category);
+
+            cardDiv.innerHTML = `
+                <div class="card-left">
+                    <div>
+                        <span class="${card.isSold ? 'encrypted' : 'card-code'}">${displayCode}</span>
+                        ${card.isSold ? `<br><small style="color:var(--danger); font-size: 10px;">(${card.soldAt})</small>` : ''}
+                    </div>
+                    ${!card.isSold ? `<button class="btn-copy" onclick="copyCardCode('${card.code}')" title="نسخ الكود">📋</button>` : ''}
+                </div>
+                <div class="card-right">
+                    <span class="badge ${badgeClass}">فئة ${card.category}</span>
+                    ${!card.isSold ? `<button class="btn-sell" onclick="sellCard('${card.id}')">بيع</button>` : '<span style="color:#9ca3af; font-size:11px; font-weight:bold;">مباع</span>'}
+                </div>
+            `;
+            container.appendChild(cardDiv); 
+        });
+    }
+
+    /* التنفيذ عند تحميل الصفحة */
+    window.onload = function() {
+        updateNetworkStatus();
+        if (currentDistributor) {
+            showAppScreen();
+            if (navigator.onLine) {
+                autoSyncOnReconnect(); // فحص ومزامنة فورية عند فتح التطبيق لو كان متصلاً
+            }
+        }  
+    };
+</script>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then(() => console.log('Service Worker registered successfully'))
+        .catch((err) => console.log('Service Worker registration failed: ', err));
+    });
+  }
+</script>
+
+
+
+
+
+</body>
+</html>
